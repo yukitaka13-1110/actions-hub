@@ -3,6 +3,7 @@ name: Check SUUMO
 on:
   repository_dispatch:
     types: [land-information]
+  workflow_dispatch:
 
 jobs:
   check:

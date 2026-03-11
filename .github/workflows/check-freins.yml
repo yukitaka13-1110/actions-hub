@@ -3,6 +3,7 @@ name: Check Freins
 on:
   repository_dispatch:
     types: [land-information]
+  workflow_dispatch:
 
 jobs:
   check:
