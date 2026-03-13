@@ -1,0 +1,179 @@
+name: "Check 早良区"
+
+on:
+  repository_dispatch:
+    types: [land-information]
+  workflow_dispatch:
+
+jobs:
+  suumo:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/land-information-scraper
+          ref: main
+          token: ${{ secrets.LIS_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Install dependencies
+        run: |
+          pip install playwright supabase
+          playwright install chromium --with-deps
+
+      - name: Run check
+        run: python scrapers/suumo.py --ward sawara
+
+      - name: Upload to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
+        run: python scripts/upload_to_supabase.py properties suumo
+
+  athome:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/land-information-scraper
+          ref: main
+          token: ${{ secrets.LIS_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Install dependencies
+        run: |
+          pip install playwright supabase
+          playwright install chromium --with-deps
+
+      - name: Run check
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.LIS_GEOCODING_API_KEY }}
+          SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
+        run: python scrapers/athome.py --ward sawara
+
+      - name: Upload to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
+        run: python scripts/upload_to_supabase.py properties athome
+
+  homes:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/land-information-scraper
+          ref: main
+          token: ${{ secrets.LIS_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Install dependencies
+        run: |
+          pip install playwright supabase
+          playwright install chromium --with-deps
+
+      - name: Run check
+        run: python scrapers/homes.py --ward sawara
+
+      - name: Upload to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
+        run: python scripts/upload_to_supabase.py properties homes
+
+  freins:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/land-information-scraper
+          ref: main
+          token: ${{ secrets.LIS_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('.python-version') }}
+
+      - name: Install dependencies
+        run: |
+          pip install playwright supabase
+          playwright install chromium --with-deps
+
+      - name: Run check
+        run: python scrapers/freins.py --ward sawara
+
+      - name: Upload to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
+        run: python scripts/upload_to_supabase.py properties freins
