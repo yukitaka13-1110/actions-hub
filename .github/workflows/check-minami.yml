@@ -46,7 +46,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
-        run: python scripts/upload_to_supabase.py properties suumo
+        run: python scripts/upload_to_supabase.py properties suumo --ward minami
 
   athome:
     if: github.ref == 'refs/heads/main'
@@ -92,7 +92,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
-        run: python scripts/upload_to_supabase.py properties athome
+        run: python scripts/upload_to_supabase.py properties athome --ward minami
 
   homes:
     if: github.ref == 'refs/heads/main'
@@ -134,7 +134,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
-        run: python scripts/upload_to_supabase.py properties homes
+        run: python scripts/upload_to_supabase.py properties homes --ward minami
 
   freins:
     if: github.ref == 'refs/heads/main'
@@ -176,4 +176,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.LIS_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.LIS_SUPABASE_KEY }}
-        run: python scripts/upload_to_supabase.py properties freins
+        run: python scripts/upload_to_supabase.py properties freins --ward minami
