@@ -52,14 +52,30 @@ jobs:
           flutter build ipa --release
           --export-options-plist=ios/ExportOptions.plist
 
-      - name: Upload IPA to Release
+      - name: Upload to Diawi
         env:
-          GH_TOKEN: ${{ secrets.POKER_UI_POC_PAT }}
+          DIAWI_TOKEN: ${{ secrets.DIAWI_TOKEN }}
         run: |
+          set +x
           IPA_PATH=$(ls build/ios/ipa/*.ipa)
-          TAG="build-$(date +%Y%m%d-%H%M%S)"
-          gh release create "$TAG" "$IPA_PATH" \
-            --repo yukitaka13-1110/poker_ui_poc \
-            --title "iOS Ad-Hoc Build $TAG" \
-            --notes "Branch: ${{ inputs.ref }}" \
-            --prerelease
+
+          RESPONSE=$(curl -s https://upload.diawi.com/ \
+            -F "token=${DIAWI_TOKEN}" \
+            -F "file=@${IPA_PATH}" \
+            -F "wall_of_apps=0" \
+            -F "find_by_udid=0" \
+            -F "comment=Branch: ${{ inputs.ref }}")
+
+          JOB=$(echo "$RESPONSE" | jq -r '.job')
+
+          for i in $(seq 1 30); do
+            STATUS_RESPONSE=$(curl -s "https://upload.diawi.com/status?token=${DIAWI_TOKEN}&job=${JOB}")
+            STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status')
+            if [ "$STATUS" = "2000" ]; then
+              LINK=$(echo "$STATUS_RESPONSE" | jq -r '.link')
+              echo "## Diawi Install Link" >> $GITHUB_STEP_SUMMARY
+              echo "$LINK" >> $GITHUB_STEP_SUMMARY
+              break
+            fi
+            sleep 2
+          done
