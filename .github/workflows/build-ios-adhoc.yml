@@ -41,6 +41,7 @@ jobs:
 
       - name: Install provisioning profile
         run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo -n "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Verify signing
