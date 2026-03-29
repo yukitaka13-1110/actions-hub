@@ -18,7 +18,7 @@ jobs:
         with:
           repository: yukitaka13-1110/${{ inputs.repo }}
           ref: ${{ inputs.ref }}
-          token: ${{ secrets.PRIVATE_REPO_PAT }}
+          token: ${{ secrets.POKER_UI_POC_PAT }}
 
       - uses: subosito/flutter-action@v2
         with:
