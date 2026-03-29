@@ -61,7 +61,11 @@ jobs:
           echo "Certificate and profile installed"
 
       - name: Build iOS (Ad-Hoc)
-        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+        run: >
+          flutter build ipa --release
+          --export-options-plist=ios/ExportOptions.plist
+          --dart-define=FLUTTER_XCODE_CODE_SIGN_IDENTITY="Apple Distribution"
+          --dart-define=FLUTTER_XCODE_DEVELOPMENT_TEAM=F3C4BY8MTB
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
