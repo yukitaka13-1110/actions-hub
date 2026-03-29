@@ -30,6 +30,7 @@ jobs:
       - name: Install CocoaPods
         run: |
           cd ios
+          pod init
           pod install --repo-update
 
       - name: Install Apple certificate and provisioning profile
