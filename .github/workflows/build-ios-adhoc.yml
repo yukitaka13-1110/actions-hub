@@ -40,12 +40,11 @@ jobs:
           p12-password: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
 
       - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo -n "${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-
-      - name: Verify signing
-        run: security find-identity -v -p codesigning
+          echo -n "$PROFILE_BASE64" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Build iOS (Ad-Hoc)
         run: >
@@ -69,7 +68,7 @@ jobs:
           JOB=$(echo "$RESPONSE" | jq -r '.job')
 
           for i in $(seq 1 30); do
-            STATUS_RESPONSE=$(curl -s "https://upload.diawi.com/status?token=${DIAWI_TOKEN}&job=${JOB}")
+            STATUS_RESPONSE=$(curl -s "https://upload.diawi.com/status" -G -d "token=${DIAWI_TOKEN}" -d "job=${JOB}")
             STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status')
             if [ "$STATUS" = "2000" ]; then
               LINK=$(echo "$STATUS_RESPONSE" | jq -r '.link')
