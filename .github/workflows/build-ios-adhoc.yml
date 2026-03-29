@@ -52,8 +52,14 @@ jobs:
           flutter build ipa --release
           --export-options-plist=ios/ExportOptions.plist
 
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-adhoc
-          path: build/ios/ipa/*.ipa
+      - name: Upload IPA to Release
+        env:
+          GH_TOKEN: ${{ secrets.POKER_UI_POC_PAT }}
+        run: |
+          IPA_PATH=$(ls build/ios/ipa/*.ipa)
+          TAG="build-$(date +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" "$IPA_PATH" \
+            --repo yukitaka13-1110/poker_ui_poc \
+            --title "iOS Ad-Hoc Build $TAG" \
+            --notes "Branch: ${{ inputs.ref }}" \
+            --prerelease
