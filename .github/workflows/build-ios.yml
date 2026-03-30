@@ -1,4 +1,4 @@
-name: iOS Ad-Hoc Build
+name: iOS Build
 
 on:
   workflow_dispatch:
@@ -46,7 +46,7 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo -n "$PROFILE_BASE64" | base64 --decode -o ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
-      - name: Build iOS (Ad-Hoc)
+      - name: Build iOS
         run: >
           flutter build ipa --release
           --export-options-plist=ios/ExportOptions.plist
