@@ -51,30 +51,16 @@ jobs:
           flutter build ipa --release
           --export-options-plist=ios/ExportOptions.plist
 
-      - name: Upload to Diawi
+      - name: Upload to TestFlight
         env:
-          DIAWI_TOKEN: ${{ secrets.DIAWI_TOKEN }}
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
-          set +x
-          IPA_PATH=$(ls build/ios/ipa/*.ipa)
-
-          RESPONSE=$(curl -s https://upload.diawi.com/ \
-            -F "token=${DIAWI_TOKEN}" \
-            -F "file=@${IPA_PATH}" \
-            -F "wall_of_apps=0" \
-            -F "find_by_udid=0" \
-            -F "comment=Branch: ${{ inputs.ref }}")
-
-          JOB=$(echo "$RESPONSE" | jq -r '.job')
-
-          for i in $(seq 1 30); do
-            STATUS_RESPONSE=$(curl -s "https://upload.diawi.com/status" -G -d "token=${DIAWI_TOKEN}" -d "job=${JOB}")
-            STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status')
-            if [ "$STATUS" = "2000" ]; then
-              LINK=$(echo "$STATUS_RESPONSE" | jq -r '.link')
-              echo "## Diawi Install Link" >> $GITHUB_STEP_SUMMARY
-              echo "$LINK" >> $GITHUB_STEP_SUMMARY
-              break
-            fi
-            sleep 2
-          done
+          mkdir -p ~/private_keys
+          echo -n "$API_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${API_KEY_ID}.p8
+          xcrun altool --upload-app \
+            -f build/ios/ipa/*.ipa \
+            --type ios \
+            --apiKey "$API_KEY_ID" \
+            --apiIssuer "$API_ISSUER_ID"
