@@ -58,14 +58,13 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
         run: |
-          mkdir -p ~/private_keys
-          echo -n "$API_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${API_KEY_ID}.p8
+          KEY_CONTENT=$(echo -n "$API_KEY_BASE64" | base64 --decode)
 
           cat <<EOF > api_key.json
           {
             "key_id": "$API_KEY_ID",
             "issuer_id": "$API_ISSUER_ID",
-            "key_filepath": "$HOME/private_keys/AuthKey_${API_KEY_ID}.p8"
+            "key": "$KEY_CONTENT"
           }
           EOF
 
