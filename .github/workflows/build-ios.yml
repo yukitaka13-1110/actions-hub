@@ -70,4 +70,5 @@ jobs:
             --ipa build/ios/ipa/*.ipa \
             --api_key_path api_key.json \
             --distribute_external true \
-            --groups "External"
+            --groups "External" \
+            --changelog "Branch: ${{ inputs.ref }}, Build: ${{ github.run_number }}"
