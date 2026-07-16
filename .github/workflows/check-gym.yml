@@ -1,0 +1,92 @@
+name: "Check 中央体育館"
+
+# 福岡市公共施設予約システムの空きを 20 秒間隔で監視し、空きが出たら LINE に通知する。
+# 本体は yukitaka13-1110/gym-reservation-checker-v2 (private)。
+#
+# 起動は外部の cron サービスから 15 分間隔で。GitHub 内蔵の cron は最短 5 分かつ
+# 数分から十数分ずれるため、監視に空白ができる。
+#
+#   POST https://api.github.com/repos/yukitaka13-1110/actions-hub/dispatches
+#   Authorization: Bearer <actions-hub への contents:write を持つ PAT>
+#   Accept: application/vnd.github+json
+#   Body: {"event_type": "gym-check"}
+#
+# 24 時間動かす。止めたい時間帯ができたら cron サービス側のスケジュールで外す。
+#
+# state/gym-availability.json に前回の空き状況を持ち、差分が出たときだけ通知する。
+# 中身は公共サイトの公開情報なのでこの public リポジトリに置いてよく、こうすることで
+# private 側への write 権限を持つ PAT を用意せずに済む（PAT は contents:read のみ）。
+
+on:
+  repository_dispatch:
+    types: [gym-check]
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 監視を続ける時間
+        default: 14m
+      interval:
+        description: 取得の間隔
+        default: 20s
+
+concurrency:
+  # 発火が重なってもループを二重に回さない。state のコミットも競合させない。
+  group: check-gym
+  cancel-in-progress: false
+
+permissions:
+  contents: write # state のコミット用
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+
+    steps:
+      - name: Checkout actions-hub (state を持つ)
+        uses: actions/checkout@v4
+
+      - name: Checkout gym-reservation-checker-v2
+        uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/gym-reservation-checker-v2
+          ref: main
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
+          path: checker
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 依存は httpx だけなので数秒。キャッシュを挟む意味がない。
+      - name: Install dependencies
+        run: pip install ./checker
+
+      - name: Run check
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.GYM_CHECKER_LINE_CHANNEL_ACCESS_TOKEN }}
+          # 15 分間隔の発火に対して 14 分。checkout と pip の分の余裕を残し、
+          # 次の発火と重ならないようにする。cron 側の client_payload で上書きできる。
+          # inputs コンテキストは workflow_dispatch でしか使えないため github.event 経由で読む。
+          DURATION: ${{ github.event.client_payload.duration || github.event.inputs.duration || '14m' }}
+          INTERVAL: ${{ github.event.client_payload.interval || github.event.inputs.interval || '20s' }}
+        run: |
+          gym-checker \
+            --duration "$DURATION" \
+            --interval "$INTERVAL" \
+            --state state/gym-availability.json
+
+      - name: Commit state
+        if: always() # 途中で失敗しても、通知済みの内容は残す
+        run: |
+          if [[ -z "$(git status --porcelain state/gym-availability.json)" ]]; then
+            echo "空き状況に変化なし"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/gym-availability.json
+          git commit -m "Update gym availability state"
+          git pull --rebase --autostash
+          git push
