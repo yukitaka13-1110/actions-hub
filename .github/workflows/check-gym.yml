@@ -19,7 +19,7 @@
 # ロールとテーブルは gym-reservation-checker-v2 の terraform/ が作る。
 #
 # actions-hub 側に用意するもの:
-#   Secrets   GYM_CHECKER_REPO_TOKEN         チェッカー本体への contents:read だけを持つ PAT
+#   Secrets   GYM_CHECKER_REPO_PAT         チェッカー本体への contents:read だけを持つ PAT
 #             GYM_CHECKER_LINE_CHANNEL_ACCESS_TOKEN  LINE Messaging API のチャネルアクセストークン
 
 name: "Check 中央体育館"
@@ -62,7 +62,7 @@ jobs:
         with:
           repository: yukitaka13-1110/gym-reservation-checker-v2
           ref: main
-          token: ${{ secrets.GYM_CHECKER_REPO_TOKEN }}
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
 
       - uses: actions/setup-python@v5
         with:
