@@ -1,0 +1,72 @@
+# dev 環境で手動確認するためのワークフロー。cron からは叩かれない。
+#
+# environment: dev を指定すると、GitHub が発行する JWT の sub が
+#   repo:<owner>/actions-hub:environment:dev
+# になる。dev のロールはこれだけを信頼しているので、prod のテーブルには触れない。
+# 環境の切り分けが AWS 側の信頼ポリシーで担保される。
+
+name: "Check 中央体育館 (dev)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 監視を続ける時間
+        default: 1m
+      interval:
+        description: 取得の間隔
+        default: 25s
+      dry_run:
+        description: LINE に送らず表示するだけ
+        type: boolean
+        default: true
+
+concurrency:
+  group: check-gym-dev
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  AWS_ROLE: arn:aws:iam::307452276908:role/gym-checker-actions-dev
+  GYM_CHECKER_TABLE: gym-availability-dev
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev # これが sub に載り、dev のロールを引ける条件になる
+
+    steps:
+      - name: Checkout gym-reservation-checker-v2
+        uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/gym-reservation-checker-v2
+          ref: main
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run check
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.GYM_CHECKER_LINE_CHANNEL_ACCESS_TOKEN }}
+        run: |
+          gym-checker \
+            --duration "${{ inputs.duration }}" \
+            --interval "${{ inputs.interval }}" \
+            --table "$GYM_CHECKER_TABLE" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
