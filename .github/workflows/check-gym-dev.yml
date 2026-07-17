@@ -33,6 +33,7 @@ env:
   AWS_REGION: ap-northeast-1
   AWS_ROLE: arn:aws:iam::307452276908:role/gym-checker-actions-dev
   GYM_CHECKER_TABLE: gym-availability-dev
+  GYM_CHECKER_ENV: dev # 生存信号に付ける。途切れるとアラームが鳴る
 
 jobs:
   check:
@@ -69,4 +70,5 @@ jobs:
             --duration "${{ inputs.duration }}" \
             --interval "${{ inputs.interval }}" \
             --table "$GYM_CHECKER_TABLE" \
+            --environment "$GYM_CHECKER_ENV" \
             ${{ inputs.dry_run && '--dry-run' || '' }}

@@ -49,6 +49,7 @@ env:
   AWS_REGION: ap-northeast-1
   AWS_ROLE: arn:aws:iam::307452276908:role/gym-checker-actions-prod
   GYM_CHECKER_TABLE: gym-availability-prod
+  GYM_CHECKER_ENV: prod # 生存信号に付ける。途切れるとアラームが鳴る
 
 jobs:
   check:
@@ -90,4 +91,5 @@ jobs:
           gym-checker \
             --duration "$DURATION" \
             --interval "$INTERVAL" \
-            --table "$GYM_CHECKER_TABLE"
+            --table "$GYM_CHECKER_TABLE" \
+            --environment "$GYM_CHECKER_ENV"
