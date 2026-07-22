@@ -22,7 +22,7 @@
 #   Secrets   GYM_CHECKER_REPO_PAT         チェッカー本体への contents:read だけを持つ PAT
 #             GYM_CHECKER_LINE_CHANNEL_ACCESS_TOKEN  LINE Messaging API のチャネルアクセストークン
 
-name: "Check 中央体育館"
+name: "Check gyms"
 
 on:
   repository_dispatch:
@@ -55,7 +55,16 @@ jobs:
   check:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    # 監視ループは実時間で duration（既定 14m）で終わる。末尾の重い巡回（佐世保は
+    # 30 分刻みで時間帯詳細が大きい）を含めても収まるよう、少し余裕を持たせる。
+    timeout-minutes: 20
+    strategy:
+      # 1 市がコケても他の市の監視は止めない。
+      fail-fast: false
+      matrix:
+        # トークン不要の 6 市。それぞれ独立したジョブで並列に回す。
+        # 同時実行 6 本は Free の上限 20 に収まる。
+        city: [fukuoka, kurume, shime, sasebo, kasuya, chikushino]
 
     steps:
       - name: Checkout gym-reservation-checker-v2
@@ -89,6 +98,7 @@ jobs:
           INTERVAL: ${{ github.event.client_payload.interval || github.event.inputs.interval || '25s' }}
         run: |
           gym-checker \
+            --city "${{ matrix.city }}" \
             --duration "$DURATION" \
             --interval "$INTERVAL" \
             --table "$GYM_CHECKER_TABLE" \
