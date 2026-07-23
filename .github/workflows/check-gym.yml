@@ -62,9 +62,10 @@ jobs:
       # 1 市がコケても他の市の監視は止めない。
       fail-fast: false
       matrix:
-        # トークン不要の 6 市。それぞれ独立したジョブで並列に回す。
-        # 同時実行 6 本は Free の上限 20 に収まる。
-        city: [fukuoka, kurume, shime, sasebo, kasuya, chikushino]
+        # トークン不要の 5 市。それぞれ独立したジョブで並列に回す。
+        # 同時実行 5 本は Free の上限 20 に収まる。
+        # 佐世保は施設が面 x 30 分刻みで空きコマが膨大（テーブルの 7 割）だったため外した。
+        city: [fukuoka, kurume, shime, kasuya, chikushino]
 
     steps:
       - name: Checkout gym-reservation-checker-v2
