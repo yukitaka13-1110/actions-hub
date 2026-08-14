@@ -22,6 +22,20 @@
 # 内蔵 cron も 1 時間ごとに置いてある。**外部 cron が死んだときの保険**で、
 # 遅れても無いよりはよい（concurrency で二重には走らない）。
 #
+# ## 10 ジョブに分ける
+#
+# 持ち分は `sharding.split`（LPT 法）が見積もりで揃うように振り分ける。10 個の
+# ジョブは示し合わせず、**同じ入力から同じ答えに辿り着く**ことに依存している。
+#
+# ジョブごとに runner が違う ＝ **出口 IP が違う**。EC2 の 1 台構成では全ホストが
+# 同じ IP から叩かれ、1 つの相手に遮断されると他も道連れだった。分ければ 1 つが
+# 落ちても他は無傷で、次の起動では IP が変わるので自然に復帰する。
+#
+# 流量（--rate）は EC2 と同じ 20 をジョブごとに持たせる。hostlimit はプロセス内
+# なので、同じホストを複数の持ち分が担当すればその相手には合計で効く。
+#
+# 空の持ち分は即終了する（watcher が少ないうちはほとんどが空）。
+#
 # ## 1 ジョブを長く回す
 #
 # 1 時間ぶん回して自分で終わる（`--duration`）。短いジョブを何度も起こす形にすると:
@@ -84,6 +98,13 @@ jobs:
   watch:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      # 1 つ落ちても他は走らせる。持ち分が独立しているので、巻き添えで止めると
+      # その持ち分の施設が丸ごと監視されなくなる。
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    name: 持ち分 ${{ matrix.shard }}/10
     # duration 59m + 起動の余裕。**ここで殺されないこと**が肝で、途中で落ちると
     # 書きかけの差分が「空きが消えた」になり、次回に同じ枠が新規として復活して
     # 誤通知になる。run_watch 側も締め切り前に自分で切り上げる。
@@ -119,10 +140,17 @@ jobs:
           TARGET_ENV: ${{ github.event.client_payload.env || inputs.env || 'prod' }}
           DURATION: ${{ github.event.client_payload.duration || inputs.duration || '59m' }}
         run: |
+          # **対象外になった watcher の掃除は 1 番だけがやる。** 10 個が同じ
+          # 全件 Scan を回す必要は無い。掃除は全 watcher と全カタログを突き合わせる
+          # ので、持ち分に関係なく 1 つで足りる。
+          PRUNE=""
+          if [ "${{ matrix.shard }}" != "1" ]; then PRUNE="--no-prune"; fi
           python scripts/run_watch.py \
             --env "$TARGET_ENV" \
+            --shard "${{ matrix.shard }}/10" \
             --duration "$DURATION" \
             --interval 30 \
             --rate 20 \
             --metrics \
+            $PRUNE \
             ${{ (github.event.client_payload.dry_run || inputs.dry_run) && '--dry-run' || '' }}
