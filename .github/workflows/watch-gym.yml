@@ -1,0 +1,128 @@
+# 体育館の空き監視。**EC2 常駐（gym-watch@prod）の置き換え。**
+#
+# なぜここ（public な actions-hub）なのか:
+# public リポジトリの Actions は分数無制限で無料。private の gym-reservation-checker-v2
+# 側で回すと従量課金になる（1 分 $0.008・無料枠 2,000 分/月）。EC2 は
+# インスタンス本体こそ無料枠だが、Public IPv4・EBS・データ転送で月 $7 かかっており、
+# 無料枠が切れれば t4g.small ぶんが上乗せされる。ここへ移せば $0 になる。
+#
+# ## 起動は外部 cron（repository_dispatch）
+#
+# GitHub 内蔵の cron は当てにならない。同じリポジトリの watch-epss.yml は
+# `*/5`（1 日 288 回）の指定に対して**実測 18 回/日**しか発火していなかった
+# （2026-08-14 に確認・平均間隔 80 分）。混雑時に落とされる仕様で、設定では直らない。
+#
+# 外部 cron から叩けば時刻どおりに出る。
+#
+#   POST https://api.github.com/repos/yukitaka13-1110/actions-hub/dispatches
+#   Authorization: Bearer <actions-hub への contents:write を持つ PAT>
+#   Accept: application/vnd.github+json
+#   Body: {"event_type": "gym-watch"}
+#
+# 内蔵 cron も 1 時間ごとに置いてある。**外部 cron が死んだときの保険**で、
+# 遅れても無いよりはよい（concurrency で二重には走らない）。
+#
+# ## 1 ジョブを長く回す
+#
+# 1 時間ぶん回して自分で終わる（`--duration`）。短いジョブを何度も起こす形にすると:
+#
+#   - **留めたセッションが毎回死ぬ。** OPAS は空き照会画面まで歩いたセッションを
+#     持ち回ることで 1 部屋 2 リクエストで読めている。張り直すと 7 本になり、
+#     相手への負荷が 3.5 倍になる（2026-08-12 に減らしたばかり）。
+#   - **流量の上限が効かない。** hostlimit はプロセス内メモリなので、ジョブを
+#     またぐと同じ相手へ独立に投げることになる。7/31 と 8/1 の IP 遮断はこれ。
+#
+# 逆に 1 本の長いジョブなら、EC2 常駐と同じ条件で動く。
+#
+# ## 隙間
+#
+# ジョブの切れ目に 40 秒ほど（checkout + pip + OIDC）の空白が出る。1 時間に
+# 1 回なので 1.1%。EC2 常駐にはこれが無いので、**そこだけは確実に劣る。**
+#
+# ## 用意するもの（actions-hub 側の Secrets・すべて設定済み）
+#
+#   GYM_CHECKER_REPO_PAT   チェッカー本体への contents:read だけを持つ PAT
+#
+# AWS へは OIDC で入る。public リポジトリに長期の鍵を置かないため。ロールは
+# gym-reservation-checker-v2 の terraform が作り、
+# repo:yukitaka13-1110/actions-hub:ref:refs/heads/main だけを信頼している。
+
+name: watch-gym
+
+on:
+  repository_dispatch:
+    types: [gym-watch]
+  schedule:
+    # 外部 cron が死んだときの保険。時刻は当てにならない（上の注記）。
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: 書き込み先
+        type: choice
+        options: [prod, dev]
+        default: prod
+      duration:
+        description: 回し続ける時間
+        default: 59m
+      dry_run:
+        description: DB に書かず所要だけ測る
+        type: boolean
+        default: false
+
+concurrency:
+  # 前の巡回が生きているうちに次を重ねない。重ねると同じサイトへ 2 倍飛ぶ。
+  # 走っている側を優先し、新しい発火は待たせる（cancel-in-progress: false）。
+  group: watch-gym-${{ github.event.client_payload.env || inputs.env || 'prod' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC で AWS のロールを借りる
+  contents: read
+
+jobs:
+  watch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # duration 59m + 起動の余裕。**ここで殺されないこと**が肝で、途中で落ちると
+    # 書きかけの差分が「空きが消えた」になり、次回に同じ枠が新規として復活して
+    # 誤通知になる。run_watch 側も締め切り前に自分で切り上げる。
+    timeout-minutes: 70
+    steps:
+      - name: チェッカー本体を取る
+        uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/gym-reservation-checker-v2
+          ref: main
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存を入れる
+        run: pip install --quiet httpx boto3
+
+      - name: AWS の資格情報
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::303357409965:role/gym-checker-actions-${{ github.event.client_payload.env || inputs.env || 'prod' }}
+          aws-region: ap-northeast-1
+
+      - name: 巡回する
+        env:
+          AWS_REGION: ap-northeast-1
+          # **AWS_PROFILE を空にする。** run_watch は既定で名前付きプロファイルを
+          # 探しに行き、無ければ落ちる経路がある。Actions では OIDC の環境変数を
+          # 使わせたいので明示的に潰す。
+          AWS_PROFILE: ""
+          TARGET_ENV: ${{ github.event.client_payload.env || inputs.env || 'prod' }}
+          DURATION: ${{ github.event.client_payload.duration || inputs.duration || '59m' }}
+        run: |
+          python scripts/run_watch.py \
+            --env "$TARGET_ENV" \
+            --duration "$DURATION" \
+            --interval 30 \
+            --rate 20 \
+            --metrics \
+            ${{ (github.event.client_payload.dry_run || inputs.dry_run) && '--dry-run' || '' }}
