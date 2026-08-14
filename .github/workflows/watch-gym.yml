@@ -133,13 +133,14 @@ jobs:
       - name: 巡回する
         env:
           AWS_REGION: ap-northeast-1
-          # **AWS_PROFILE を空にする。** run_watch は既定で名前付きプロファイルを
-          # 探しに行き、無ければ落ちる経路がある。Actions では OIDC の環境変数を
-          # 使わせたいので明示的に潰す。
-          AWS_PROFILE: ""
           TARGET_ENV: ${{ github.event.client_payload.env || inputs.env || 'prod' }}
           DURATION: ${{ github.event.client_payload.duration || inputs.duration || '59m' }}
         run: |
+          # **AWS_PROFILE は空文字ではなく「無い」状態にする。** 空文字を渡すと
+          # botocore が「名前が空のプロファイル」を探して
+          # ProfileNotFound: The config profile () could not be found で落ちる。
+          # boto3.Session() は環境変数を直接読むので、コード側の分岐より先に落ちる。
+          unset AWS_PROFILE
           # **対象外になった watcher の掃除は 1 番だけがやる。** 10 個が同じ
           # 全件 Scan を回す必要は無い。掃除は全 watcher と全カタログを突き合わせる
           # ので、持ち分に関係なく 1 つで足りる。
