@@ -19,8 +19,16 @@
 #   Accept: application/vnd.github+json
 #   Body: {"event_type": "gym-watch"}
 #
-# 内蔵 cron も 1 時間ごとに置いてある。**外部 cron が死んだときの保険**で、
-# 遅れても無いよりはよい（concurrency で二重には走らない）。
+# **内蔵 cron は置かない。** 保険のつもりで `0 * * * *` を併置したところ、
+# 外部 cron の起動を毎時つぶしていた（2026-08-14〜15 の実測）。GitHub は同じ
+# concurrency グループで待機中の run が新たに来ると、**先に待っていた方を捨てる**
+# ので、外部 cron で始まったジョブが内蔵 cron に置き換わる。監視は途切れないが、
+# 毎時 10 ジョブぶんの無駄な起動と、どちらが本番か分からないログが残る。
+#
+#     20:00 repository_dispatch  cancelled  ← 外部で始まったのに
+#     20:21 schedule             success    ← 内蔵に潰された
+#
+# 起動は外部 cron の 1 本だけにする。
 #
 # ## 10 ジョブに分ける
 #
@@ -66,9 +74,6 @@ name: watch-gym
 on:
   repository_dispatch:
     types: [gym-watch]
-  schedule:
-    # 外部 cron が死んだときの保険。時刻は当てにならない（上の注記）。
-    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       env:
