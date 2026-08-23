@@ -1,0 +1,90 @@
+# 留めたセッションが古い写しを配っていないかを見張る。**巡回とは別のジョブ。**
+#
+# ## なぜ巡回から出したのか
+#
+# 鮮度を確かめる唯一の手は「独立した経路で取り直して比べる」ことで、その経路は
+# 入口からの助走ぶん（実測 6〜7 秒）かかる。これを巡回の中で 20 巡に 1 度
+# やっていたので、**16 分おきに 1 巡が 1 秒から 9〜10 秒に跳ねていた**
+# （2026-08-23）。
+#
+# **検査の頻度と巡回の速さを一緒に決める理由が無い。** 留めたセッションが
+# 古くなるかどうかは相手の作りの性質で、施設ごと・巡ごとに変わらない。
+# 1 つの部屋で見張り続ければ分かる。こちらへ移して、巡回は 1 往復・1 秒に戻した
+# （gym-reservation-checker-v2 の `opas._VERIFY_EVERY = 0`）。
+#
+# ## 何を見ているか
+#
+# 同じ部屋・同じ週について
+#
+#     留めたセッション（張りっぱなし）  と  毎回入口から歩き直した新規セッション
+#
+# を比べる。**新規側が前回から変わったのに留めた側が追随していなければ、
+# 留めた側は古い写しを配っている。**
+#
+# 動かないデータ同士の一致には意味が無い（キャッシュを返していても一致する）。
+# 1 度も動かなかった回は「確かめられていない」と警告が出る。
+#
+# ## 負荷
+#
+# 1 回の比較で 7 リクエスト。5 分おき・55 分で 11 回 ＝ **1 時間に 77 本**。
+# 巡回本体（15 秒周期）に比べればごくわずか。相手は 1 サイト・1 部屋だけ。
+#
+# ## 起動
+#
+# 内蔵 cron で 1 日 2 回。**watch-gym と違って時刻の正確さは要らない**ので、
+# 外部 cron を用意していない（内蔵 cron が間引かれても、見張りが少し遅れるだけ）。
+# concurrency も watch-gym とは別にして、巡回を止めない。
+#
+# 食い違いがあればジョブが落ちる（終了コード 1）。
+
+name: verify-parked-freshness
+
+on:
+  schedule:
+    # 昼と夜に 1 本ずつ。**予約が動く時間帯を跨ぐこと**が目的なので、
+    # 深夜だけ回しても意味が薄い（JST 12:05 と 20:05）。
+    - cron: "5 3 * * *"
+    - cron: "5 11 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 回し続ける時間（分）
+        default: "55"
+      every:
+        description: 比べる間隔（秒）
+        default: "300"
+
+concurrency:
+  # **巡回とは別のグループ。** 同じにすると見張りが巡回を待たせる（あるいは
+  # 潰す）ことになり、本業が止まる。
+  group: verify-parked-freshness
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: チェッカー本体を取る
+        uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/gym-reservation-checker-v2
+          ref: main
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存を入れる
+        run: pip install --quiet httpx
+
+      - name: 見張る
+        run: |
+          python scripts/verify_parked_freshness.py \
+            --minutes "${{ inputs.minutes || '55' }}" \
+            --every "${{ inputs.every || '300' }}"
