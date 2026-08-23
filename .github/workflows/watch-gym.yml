@@ -135,6 +135,24 @@ jobs:
           role-to-assume: arn:aws:iam::303357409965:role/gym-checker-actions-${{ github.event.client_payload.env || inputs.env || 'prod' }}
           aws-region: ap-northeast-1
 
+      # **未対応の要望を掛け直す。** 対応済みかどうかの判定は要望を受けた時に
+      # 1 度きりなので、施設を足しても既に積まれた要望は未対応のまま残る。
+      # 実際、対応済みの施設を要望した人が「未対応」と表示されたまま放置され、
+      # 気づいた人だけが自力で施設を見つけていた（2026-08-24）。
+      #
+      # 持ち分 1 だけがやる（全 watcher を 1 度舐めるので 10 個で回す必要が無い）。
+      # ここが落ちても巡回は続ける ―― 空きの検知のほうが大事。
+      - name: 要望の対応済みを掛け直す
+        if: matrix.shard == 1
+        continue-on-error: true
+        env:
+          AWS_REGION: ap-northeast-1
+          TARGET_ENV: ${{ github.event.client_payload.env || inputs.env || 'prod' }}
+        run: |
+          unset AWS_PROFILE
+          CATALOG_TABLE="gym-catalog-$TARGET_ENV" \
+            python scripts/backfill_request_handled.py "$TARGET_ENV"
+
       - name: 巡回する
         env:
           AWS_REGION: ap-northeast-1
