@@ -1,0 +1,75 @@
+# **一時的な検証用。結果が出たら消す。**
+#
+# 留めたセッションの Cookie を別の IP（Actions の runner）から使えるかを見る。
+# 手元で park して DynamoDB に置いた Cookie を読み、同じ画面が読めるか試す。
+#
+# これが通れば、ジョブをまたいでセッションを持ち越せる ―― 毎時の入れ替えで
+# 全 unit が入口から歩き直している（1 unit 6〜7 秒・unit 数に比例）のを
+# 消せる。通らなければ、セッションは IP に紐づいているということ。
+
+name: tmp-cookie-crossip
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: yukitaka13-1110/gym-reservation-checker-v2
+          ref: main
+          token: ${{ secrets.GYM_CHECKER_REPO_PAT }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx boto3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::303357409965:role/gym-checker-actions-prod
+          aws-region: ap-northeast-1
+      - name: 別 IP から使えるか
+        env:
+          AWS_REGION: ap-northeast-1
+        run: |
+          unset AWS_PROFILE
+          python - <<'EOF'
+          import datetime, json, logging, sys
+          sys.path.insert(0, "src")
+          logging.disable(logging.WARNING)
+          import boto3, httpx
+          from gym_checker import catalog as c
+          from gym_checker.vendors import get_adapter
+
+          item = boto3.resource("dynamodb").Table("gym-dashboard-prod").get_item(
+              Key={"pk": "TEST#parked-cookie"}).get("Item")
+          if not item:
+              print("置いてある Cookie が無い"); raise SystemExit(2)
+          jar = json.loads(item["cookies"])
+          want = set(json.loads(item["cells"]))
+          print("手元のセル:", len(want), "| 置かれた時刻:", item["generated_at"])
+          print("この runner の出口 IP:", httpx.get("https://api.ipify.org", timeout=20).text)
+
+          a = get_adapter('opas'); cat = c.load('opas', 'kadoma')
+          fac = cat.facilities[0]
+          starts = [datetime.date(2026, 9, 5)]
+          site = a._site('kadoma')
+          cl = a._client(site["muni"])
+          for k, v in jar.items():
+              cl.cookies.set(k, v)
+          try:
+              cells = a._cells_of(cl, starts)
+          except Exception as exc:
+              print("**別 IP では読めない**:", type(exc).__name__, str(exc)[:120])
+              raise SystemExit(1)
+          got = set(f"{r}|{w}|{b[0]}-{b[1]}|{o}" for r, w, b, o in cells)
+          print("別 IP で読めたセル:", len(got))
+          print("手元と一致:", got == want, "| 差", len(got ^ want))
+          EOF
