@@ -1,0 +1,34 @@
+# 手元から届かない相手を、**別の IP（GitHub のランナー）から**叩いて確かめる。
+#
+# 手元の IP だけが弾かれているのか、どこからでも駄目なのかを分けるためのもの。
+# 2026-08-25、いばらき公共施設予約システム（yoyacool.e-harp.jp/ibaraki）が
+# 手元から Imperva の 403 を返したので作った。同じホストの福井・岐阜は 200 で、
+# 「時間帯のせい」ではないところまでは分かっていた。
+#
+# **叩くのは 1 回だけ。** 相手に負荷をかけないよう、URL ごとに 1 リクエスト。
+name: probe-host
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 空白区切りの URL（1 つずつ 1 回だけ叩く）
+        required: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 叩いて結果を出す
+        run: |
+          echo "ランナーの出口 IP: $(curl -s --max-time 20 https://api.ipify.org || echo '取れず')"
+          for u in ${{ github.event.inputs.urls }}; do
+            echo "=== $u"
+            code=$(curl -s -o /tmp/body.html -w '%{http_code}' --max-time 30 -L \
+              -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36" \
+              "$u" || echo 000)
+            echo "  HTTP $code / $(wc -c < /tmp/body.html) バイト"
+            sed 's/<[^>]*>/\n/g' /tmp/body.html \
+              | grep -vE '^\s*$|^\s*[{}*/-]|font|margin|padding|color|width|height|display|border|background|text-align' \
+              | head -6
+          done
